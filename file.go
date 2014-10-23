@@ -40,40 +40,50 @@ func OpenFile(filename string) (*File, error) {
 	return ReadZip(f)
 }
 
-// Save the File to an xlsx file at the provided path.
-func (f *File) Save(path string) (err error) {
-	var parts map[string]string
-	var target *os.File
-	var zipWriter *zip.Writer
-
-	parts, err = f.MarshallParts()
+// ReadFile() takes the r io.Reader of XLSX and size of zip in bytes, returns a populated
+// xlsx.File struct for it.
+func Read(r io.ReaderAt, size int64) (*File, error) {
+	zr, err := zip.NewReader(r, size)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	target, err = os.Create(path)
+	return ReadZipReader(zr)
+}
+
+// Write the xlsx content to the given Writer
+func (f *File) Write(w io.Writer) error {
+	parts, err := f.MarshallParts()
 	if err != nil {
-		return
+		return nil
 	}
 
-	zipWriter = zip.NewWriter(target)
+	zipWriter := zip.NewWriter(w)
 
 	for partName, part := range parts {
 		var writer io.Writer
 		writer, err = zipWriter.Create(partName)
 		if err != nil {
-			return
+			return err
 		}
 		_, err = writer.Write([]byte(part))
 		if err != nil {
-			return
+			return err
 		}
 	}
-	err = zipWriter.Close()
+	return zipWriter.Close()
+}
+
+// Save the File to an xlsx file at the provided path.
+func (f *File) Save(path string) error {
+	target, err := os.Create(path)
 	if err != nil {
-		return
+		return err
 	}
 
+	if err := f.Write(target); err != nil {
+		return err
+	}
 	return target.Close()
 }
 
